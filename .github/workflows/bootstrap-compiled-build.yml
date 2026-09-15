@@ -1,0 +1,78 @@
+name: Bootstrap compiled MeMeMe web build
+
+on:
+  push:
+    paths:
+      - '.github/workflows/bootstrap-compiled-build.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  publish-compiled-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout public playtest repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download exact 0.1.65.1 compiled web artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -L --fail --retry 3 \
+            'https://sdmntprwestus2.oaiusercontent.com/files/00000000-f00c-81f8-8225-4bddce7d8f72/raw?se=2026-09-15T17%3A44%3A31Z&sp=r&sv=2026-02-06&sr=b&scid=ecd9c7c8-022d-5552-8c6b-90c0d4f56656&skoid=6980ab1e-b994-4668-84de-ad0444c9d08b&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-14T20%3A04%3A48Z&ske=2026-09-15T20%3A04%3A48Z&sks=b&skv=2026-02-06&sig=5uzicvnk5lno9MJ4M1uaICovnsPCA6xOFmzFbStDBJI%3D' \
+            -o /tmp/mememe-web.zip
+          rm -rf /tmp/mememe-web
+          mkdir -p /tmp/mememe-web
+          unzip -q /tmp/mememe-web.zip -d /tmp/mememe-web
+
+      - name: Publish browser-only files
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f /tmp/mememe-web/index.html
+          test -d /tmp/mememe-web/assets
+          test -d /tmp/mememe-web/audio
+
+          rm -rf assets audio index.html
+          cp /tmp/mememe-web/index.html ./index.html
+          cp -R /tmp/mememe-web/assets ./assets
+          mkdir -p audio/bgm audio/sfx
+          cp /tmp/mememe-web/audio/bgm/*.ogg audio/bgm/
+          cp /tmp/mememe-web/audio/sfx/*.ogg audio/sfx/
+
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('index.html')
+          text = p.read_text(encoding='utf-8')
+          notice = '<!-- Copyright © 2026 MeMeMe. All rights reserved. Compiled playtest build only. -->\n'
+          if not text.startswith(notice):
+              p.write_text(notice + text, encoding='utf-8')
+          PY
+
+          touch .nojekyll
+
+          if find . -type f -name '*.map' | grep -q .; then
+            echo 'ERROR: source map detected'
+            exit 1
+          fi
+          if [ -d src ] || [ -d tests ] || [ -d docs ]; then
+            echo 'ERROR: private source-like directory detected'
+            exit 1
+          fi
+
+      - name: Commit compiled web build
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'MeMeMe Playtest Publisher'
+          git config user.email 'actions@users.noreply.github.com'
+          git add index.html assets audio .nojekyll
+          if git diff --cached --quiet; then
+            echo 'Compiled build already current.'
+            exit 0
+          fi
+          git commit -m 'publish compiled MeMeMe web playtest 0.1.65.1'
+          git push origin HEAD:main
