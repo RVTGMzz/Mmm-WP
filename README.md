@@ -8,6 +8,8 @@ This repository intentionally contains only browser-ready compiled files require
 
 This build is provided for testing MeMeMe on desktop browsers and Steam Deck.
 
+Deployment target: **GitHub Pages**.
+
 ## Copyright
 
 **Copyright © 2026 MeMeMe. All rights reserved.**
