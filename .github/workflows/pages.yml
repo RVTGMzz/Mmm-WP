@@ -17,6 +17,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      pages_ready: ${{ steps.pages-status.outputs.ready }}
     steps:
       - name: Checkout compiled playtest repo
         uses: actions/checkout@v4
@@ -37,15 +39,30 @@ jobs:
           test ! -d _site/tests
           test ! -d _site/docs
 
-      - name: Configure GitHub Pages
+      - name: Configure GitHub Pages if enabled
+        id: configure-pages
+        continue-on-error: true
         uses: actions/configure-pages@v5
 
+      - name: Record Pages availability
+        id: pages-status
+        shell: bash
+        run: |
+          if [ '${{ steps.configure-pages.outcome }}' = 'success' ]; then
+            echo 'ready=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+            echo 'GitHub Pages is not enabled yet. In repository Settings -> Pages, set Source to GitHub Actions.'
+          fi
+
       - name: Upload Pages artifact
+        if: steps.configure-pages.outcome == 'success'
         uses: actions/upload-pages-artifact@v3
         with:
           path: _site
 
   deploy:
+    if: needs.build.outputs.pages_ready == 'true'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
